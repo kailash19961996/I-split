@@ -7,6 +7,7 @@ import 'ace-builds/src-noconflict/ext-language_tools';
 const JSONEditor = ({ jsonData, onChange, pdfText }) => {
   const [editorValue, setEditorValue] = useState('');
   const [highlightedRanges, setHighlightedRanges] = useState([]);
+  const [blockStats, setBlockStats] = useState({ found: 0, notFound: 0 });
 
   useEffect(() => {
     if (jsonData) {
@@ -320,12 +321,16 @@ const JSONEditor = ({ jsonData, onChange, pdfText }) => {
 
     // Process each content value with word-by-word highlighting
     const allHighlights = [];
+    let blocksFoundTotal = 0;
+    let blocksNotFoundTotal = 0;
     
     contentValues.forEach((textValue, index) => {
       console.log(`\n🎯 Processing content value ${index + 1}: "${textValue.value.substring(0, 50)}${textValue.value.length > 50 ? '...' : ''}" at path: ${textValue.path}`);
       
-      const highlights = highlightContentWordByWord(textValue, jsonString, pdfContent);
-      allHighlights.push(...highlights);
+      const result = highlightContentWordByWord(textValue, jsonString, pdfContent);
+      allHighlights.push(...result.highlights);
+      blocksFoundTotal += result.blocksFound;
+      blocksNotFoundTotal += result.blocksNotFound;
     });
     
     // Apply all highlights to the editor
@@ -337,6 +342,7 @@ const JSONEditor = ({ jsonData, onChange, pdfText }) => {
     });
     
     setHighlightedRanges(allHighlights);
+    setBlockStats({ found: blocksFoundTotal, notFound: blocksNotFoundTotal });
     console.log(`✅ Applied ${allHighlights.length} highlights to editor`);
     console.log('🎨 === END WORD-BY-WORD HIGHLIGHTING PROCESS ===\n');
   };
@@ -346,6 +352,8 @@ const JSONEditor = ({ jsonData, onChange, pdfText }) => {
    */
   const highlightContentWordByWord = (textValue, jsonString, pdfContent) => {
     const highlights = [];
+    let blocksFound = 0;
+    let blocksNotFound = 0;
     
     console.log(`  🔍 Starting word-by-word analysis for: "${textValue.value.substring(0, 100)}${textValue.value.length > 100 ? '...' : ''}"`);
     
@@ -400,6 +408,7 @@ const JSONEditor = ({ jsonData, onChange, pdfText }) => {
 
         // Determine match at block level
         const blockMatches = phraseMatches(blockPhrase, pdfContent);
+        if (blockMatches) blocksFound++; else blocksNotFound++;
 
         // Emit per-word highlights using the block color
         for (let wi = blockStart; wi < blockEnd; wi++) {
@@ -438,7 +447,7 @@ const JSONEditor = ({ jsonData, onChange, pdfText }) => {
     });
 
     console.log(`  ✅ Created ${highlights.length} word-level highlights`);
-    return highlights;
+    return { highlights, blocksFound, blocksNotFound };
   };
 
 
@@ -492,6 +501,13 @@ const JSONEditor = ({ jsonData, onChange, pdfText }) => {
           <span className="legend-item">
             <span className="legend-box red"></span>
             Not found in PDF
+          </span>
+          <span className="legend-item stats">
+            {(() => {
+              const total = blockStats.found + blockStats.notFound;
+              const pct = total ? Math.round((blockStats.found / total) * 100) : 0;
+              return `Blocks: ${blockStats.found} found / ${blockStats.notFound} not • ${pct}%`;
+            })()}
           </span>
         </div>
       </div>

@@ -11,6 +11,8 @@ function App() {
   const [pageEnd, setPageEnd] = useState(4);
   const [loading, setLoading] = useState(false);
   const [activeButton, setActiveButton] = useState(null);
+  const [llm1Done, setLlm1Done] = useState(false);
+  const [llm2Done, setLlm2Done] = useState(false);
 
   // PDF text for keyword matching (extracted from actual PDF)
   const [pdfText, setPdfText] = useState('');
@@ -43,6 +45,12 @@ function App() {
       
       if (response.data.status === 'success') {
         setJsonData(response.data.data);
+        if (endpoint === 'llm-pass-1') {
+          setLlm1Done(true);
+        }
+        if (endpoint === 'llm-pass-2') {
+          setLlm2Done(true);
+        }
       }
     } catch (error) {
       console.error(`Error calling ${endpoint}:`, error);
@@ -57,64 +65,37 @@ function App() {
     setJsonData(newJsonData);
   };
 
+  const handleUploadPdf = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    setPdfFile(url);
+    setJsonData(null);
+    setLlm1Done(false);
+    setLlm2Done(false);
+  };
+
+  const handleTocStart = () => {
+    setPageStart(1);
+  };
+
+  const handleTocEnd = () => {
+    setPageEnd(Math.max(pageStart, 4));
+  };
+
   return (
     <div className="app-container">
-      <header className="app-header">
-        <h1>Intelligent Document Splitter</h1>
-        <div className="page-range-controls">
-          <label>
-            Start Page:
-            <input
-              type="number"
-              min="1"
-              value={pageStart}
-              onChange={(e) => setPageStart(parseInt(e.target.value) || 1)}
-              className="page-input"
-            />
-          </label>
-          <label>
-            End Page:
-            <input
-              type="number"
-              min="1"
-              value={pageEnd}
-              onChange={(e) => setPageEnd(parseInt(e.target.value) || 1)}
-              className="page-input"
-            />
+      <header className="topbar">
+        <div className="brand">
+          <span className="brand-mark">i</span>Split
+        </div>
+        <div className="top-actions">
+          <label className="upload-btn">
+            <input type="file" accept="application/pdf" onChange={handleUploadPdf} />
+            Upload PDF
           </label>
         </div>
       </header>
-
-      <div className="control-panel">
-        <button
-          onClick={() => handleApiCall('llm-pass-1')}
-          disabled={loading}
-          className={`control-btn ${activeButton === 'llm-pass-1' ? 'active' : ''}`}
-        >
-          {loading && activeButton === 'llm-pass-1' ? 'Processing...' : 'LLM Pass 1'}
-        </button>
-        <button
-          onClick={() => handleApiCall('llm-pass-2')}
-          disabled={loading}
-          className={`control-btn ${activeButton === 'llm-pass-2' ? 'active' : ''}`}
-        >
-          {loading && activeButton === 'llm-pass-2' ? 'Processing...' : 'LLM Pass 2'}
-        </button>
-        <button
-          onClick={() => handleApiCall('splitter-1', true)}
-          disabled={loading}
-          className={`control-btn ${activeButton === 'splitter-1' ? 'active' : ''}`}
-        >
-          {loading && activeButton === 'splitter-1' ? 'Processing...' : 'Splitter 1'}
-        </button>
-        <button
-          onClick={() => handleApiCall('splitter-2', true)}
-          disabled={loading}
-          className={`control-btn ${activeButton === 'splitter-2' ? 'active' : ''}`}
-        >
-          {loading && activeButton === 'splitter-2' ? 'Processing...' : 'Splitter 2'}
-        </button>
-      </div>
 
       <div className="main-content">
         <div className="panel pdf-panel">
@@ -126,6 +107,57 @@ function App() {
         </div>
         
         <div className="panel json-panel">
+          <div className="json-actions">
+            <div className="toc-inline">
+              <span>Table of content</span>
+              <input
+                className={`toc-input ${pageStart ? '' : 'invalid'}`}
+                type="number"
+                min="1"
+                value={pageStart}
+                onChange={(e) => setPageStart(parseInt(e.target.value) || 1)}
+                placeholder="Start"
+              />
+              <input
+                className={`toc-input ${pageEnd ? '' : 'invalid'}`}
+                type="number"
+                min="1"
+                value={pageEnd}
+                onChange={(e) => setPageEnd(parseInt(e.target.value) || 1)}
+                placeholder="End"
+              />
+            </div>
+            <div className="action-inline">
+              <button
+                onClick={() => handleApiCall('llm-pass-1')}
+                disabled={loading || !pageStart || !pageEnd}
+                className={`pill-btn ${activeButton === 'llm-pass-1' ? 'active' : ''} ${(!pageStart || !pageEnd) ? 'danger' : ''}`}
+              >
+                {loading && activeButton === 'llm-pass-1' ? 'Processing…' : 'LLM PASS 1'}
+              </button>
+              <button
+                onClick={() => handleApiCall('splitter-1', true)}
+                disabled={!llm1Done || loading}
+                className={`pill-btn ${activeButton === 'splitter-1' ? 'active' : ''}`}
+              >
+                {loading && activeButton === 'splitter-1' ? 'Processing…' : 'Splitter 1'}
+              </button>
+              <button
+                onClick={() => handleApiCall('llm-pass-2')}
+                disabled={!llm1Done || loading}
+                className={`pill-btn ${activeButton === 'llm-pass-2' ? 'active' : ''}`}
+              >
+                {loading && activeButton === 'llm-pass-2' ? 'Processing…' : 'LLM PASS 2'}
+              </button>
+              <button
+                onClick={() => handleApiCall('splitter-2', true)}
+                disabled={!llm2Done || loading}
+                className={`pill-btn ${activeButton === 'splitter-2' ? 'active' : ''}`}
+              >
+                {loading && activeButton === 'splitter-2' ? 'Processing…' : 'Splitter 2'}
+              </button>
+            </div>
+          </div>
           <JSONEditor 
             jsonData={jsonData}
             onChange={handleJsonChange}

@@ -14,24 +14,71 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%);
+  background: radial-gradient(1200px 600px at 10% -10%, #ffffff 0%, #f6f8fb 40%, #eef1f5 100%);
 }
 
-/* Header Styles */
-.app-header {
-  background: #ffffff;
-  padding: 1.5rem 2rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+/* Modern Topbar */
+.topbar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  z-index: 100;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  background: rgba(255,255,255,0.9);
+  backdrop-filter: saturate(180%) blur(8px);
+  border-bottom: 1px solid #e6ebf1;
 }
 
-.app-header h1 {
-  font-size: 1.8rem;
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  font-size: 1.25rem;
   color: #2c3e50;
-  font-weight: 600;
+}
+
+.brand-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #4a90e2 0%, #6ea8ff 100%);
+  color: #fff;
+  font-weight: 800;
+}
+
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.upload-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  border-radius: 10px;
+  background: #4a90e2;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(74,144,226,0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.upload-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(74,144,226,0.45);
+}
+
+.upload-btn input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .page-range-controls {
@@ -64,13 +111,12 @@ body {
 }
 
 /* Control Panel */
-.control-panel {
-  background: #ffffff;
-  padding: 1rem 2rem;
+/* Right rail */
+.right-rail {
+  width: 240px;
   display: flex;
-  gap: 1rem;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-  border-bottom: 1px solid #e0e0e0;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
 .control-btn {
@@ -121,7 +167,8 @@ body {
 
 /* Main Content Area */
 .main-content {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   flex: 1;
   gap: 1.5rem;
   padding: 1.5rem;
@@ -140,11 +187,97 @@ body {
 .pdf-panel {
   flex: 1;
   min-width: 0;
+  background: rgba(255,255,255,0.7);
+  backdrop-filter: blur(3px);
 }
 
 .json-panel {
   flex: 1;
   min-width: 0;
+  background: rgba(255,255,255,0.7);
+  backdrop-filter: blur(3px);
+}
+
+.json-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #eef1f5;
+}
+
+.toc-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #6c757d;
+  font-size: 0.9rem;
+}
+
+.toc-input {
+  width: 80px;
+  padding: 0.45rem 0.6rem;
+  border-radius: 10px;
+  border: 1.5px solid #e6ebf1;
+  background: #fff;
+}
+
+.toc-input.invalid {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 3px rgba(220,53,69,0.08);
+}
+
+.action-inline { display: flex; gap: 0.5rem; }
+
+.pill-btn.danger { border-color: #dc3545; color: #dc3545; }
+
+.toc-card {
+  background: #ffffff;
+  border-radius: 14px;
+  border: 1px solid #eef1f5;
+  padding: 0.75rem 1rem;
+}
+
+.toc-header {
+  font-size: 0.85rem;
+  color: #6c757d;
+  margin-bottom: 0.5rem;
+}
+
+.toc-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.ghost-btn {
+  background: #f8f9fb;
+  border: 1px solid #e6ebf1;
+  color: #2c3e50;
+  border-radius: 10px;
+  padding: 0.5rem 0.8rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.pill-btn {
+  padding: 0.7rem 1rem;
+  border-radius: 999px;
+  border: none;
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(16,24,40,0.06);
+  border: 1px solid #eef1f5;
+  color: #2c3e50;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pill-btn.active {
+  border-color: #4a90e2;
+}
+
+.pill-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* PDF Viewer Styles */
@@ -298,6 +431,8 @@ body {
   background: #dc3545;
 }
 
+.legend .stats { color: #2c3e50; font-weight: 600; }
+
 /* ACE Editor Custom Highlights */
 .ace-highlight-green {
   position: absolute;
@@ -331,19 +466,7 @@ body {
 /* Responsive Design */
 @media (max-width: 1024px) {
   .main-content {
-    flex-direction: column;
+    grid-template-columns: 1fr;
   }
-  
-  .panel {
-    width: 100%;
-  }
-  
-  .app-header {
-    flex-direction: column;
-    gap: 1rem;
-  }
-  
-  .control-panel {
-    flex-wrap: wrap;
-  }
+  .right-rail { width: 100%; order: -1; flex-direction: row; overflow-x: auto; }
 }
