@@ -10,8 +10,10 @@ const JSONEditor = ({ jsonData, onChange, pdfText }) => {
   const [highlightedRanges, setHighlightedRanges] = useState([]);
   const [blockStats, setBlockStats] = useState({ found: 0, notFound: 0 });
   const [redRanges, setRedRanges] = useState([]);
-  const [popover, setPopover] = useState({ visible: false, top: 0, left: 0, snippet: '', path: '', placement: 'above' });
+  const [showFixButton, setShowFixButton] = useState(false);
+  const [currentSnippet, setCurrentSnippet] = useState('');
   const editorRef = useRef(null);
+  const containerRef = useRef(null);
 
   useEffect(() => {
     if (jsonData) {
@@ -504,33 +506,38 @@ const JSONEditor = ({ jsonData, onChange, pdfText }) => {
     const row = pos.row;
     const col = pos.column;
     const match = redRanges.find(r => row === r.startRow && col >= r.startCol && col <= r.endCol);
+    
     if (match) {
-      const screen = editorRef.current.renderer.textToScreenCoordinates(row, Math.min(col, match.endCol));
-      const containerRect = editorRef.current.container.getBoundingClientRect();
-      const top = screen.pageY - containerRect.top - 8;
-      const left = screen.pageX - containerRect.left + 8;
-      const placement = (screen.pageY - containerRect.top < 40) ? 'below' : 'above';
       // Extract snippet around cursor from editorValue
       const snippet = editorRef.current.session.getLine(row).slice(match.startCol, match.endCol);
-      setPopover({ visible: true, top, left, snippet, path: '', placement });
+      setCurrentSnippet(snippet);
+      setShowFixButton(true);
     } else {
-      if (popover.visible) setPopover(prev => ({ ...prev, visible: false }));
+      setShowFixButton(false);
+      setCurrentSnippet('');
     }
   };
 
-  const handleAskAI = async () => {
-    if (!popover.snippet) return;
+  const handleFixWithAI = async () => {
+    if (!currentSnippet) return;
     try {
-      await askAIForBlock({ snippet: popover.snippet, path: popover.path });
+      await askAIForBlock({ snippet: currentSnippet, path: '' });
     } catch (e) {
       // no-op for now
     }
   };
 
   return (
-    <div className="json-editor-container">
+    <div className="json-editor-container" ref={containerRef}>
       <div className="editor-header">
-        <h3>JSON Editor</h3>
+        <div className="editor-title-section">
+          <h3>JSON Editor</h3>
+          {showFixButton && (
+            <button className="fix-ai-btn pulsating" onClick={handleFixWithAI}>
+              Fix with AI
+            </button>
+          )}
+        </div>
         <div className="legend legend-compact">
           {(() => {
             const total = blockStats.found + blockStats.notFound;
@@ -572,11 +579,6 @@ const JSONEditor = ({ jsonData, onChange, pdfText }) => {
         }}
         markers={highlightedRanges}
       />
-      {popover.visible && (
-        <div className={`ask-ai-popover ${popover.placement === 'below' ? 'below' : ''}`} style={{ top: popover.top, left: popover.left }}>
-          <button className="ask-ai-btn" onClick={handleAskAI}>Ask AI</button>
-        </div>
-      )}
     </div>
   );
   };
