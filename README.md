@@ -5,6 +5,9 @@ A lightweight tool that ingests a regulation document (PDF for now) and breaks i
 **AI angle (short overview):**
 The app uses LLM passes to: (1) detect headings, (2) split bodies into items, and (3) infer hierarchical “paths” (e.g., Chapter/Part). We keep the original text intact (no rephrasing). The “Ask AI” button is currently a placeholder you can wire to an agent that suggests fixes for blocks that don’t match the PDF. &#x20;
 
+
+[![Watch the demo](https://img.youtube.com/vi/VIDEO_ID/hqdefault.jpg)](https://www.youtube.com/watch?v=GVj4KfyxKZA)
+
 ---
 
 ## What you get
