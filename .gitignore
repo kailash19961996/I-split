@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+.env
+
+# Node.js / React
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Build outputs
+frontend/build/
+frontend/dist/
+
+# Project specific
+backend/uploads/
+backend/debug_outputs/
+backend/TEST/debug_outputs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Logs
+*.log

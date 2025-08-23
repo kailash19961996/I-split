@@ -297,16 +297,19 @@ const JSONEditor = ({ jsonData, onChange, pdfText }) => {
     // Filter to only meaningful content values (not empty arrays, etc.)
     const contentValues = allTextValues.filter(item => {
       if (item.isEmpty) return false;
+      const isRefField = /\.ref$/.test(item.path);
       
-      // Skip non-content paths - be more specific about what to skip
-      if (item.path.includes('.path') || 
-          item.path.includes('.items') ||
-          item.value.trim().length < 3) { // Skip very short values that are likely not content
+      // Skip non-content fields (none for path: we want to include path array strings)
+      
+      // Only include content, title, url, ref and path entries (for LLM Pass 3 results).
+      // For path arrays, we include each string element; their paths end with "]" not the field name.
+      const isAllowedField = /\.(content|title|url|ref)$/.test(item.path) || /\.path\.\[\d+\]$/.test(item.path);
+      if (!isAllowedField) {
         return false;
       }
       
-      // Only include content, title, and url fields
-      if (!item.path.includes('.content') && !item.path.includes('.title') && !item.path.includes('.url')) {
+      // Minimal length: allow short refs, but avoid trivial empties elsewhere
+      if (!isRefField && item.value.trim().length < 3) {
         return false;
       }
       
@@ -368,15 +371,68 @@ const JSONEditor = ({ jsonData, onChange, pdfText }) => {
     const jsonEncodedValueWithQuotes = JSON.stringify(textValue.value); // includes surrounding quotes
     const jsonEncodedValue = jsonEncodedValueWithQuotes.slice(1, -1);   // strip surrounding quotes
 
-    // Find the value in the JSON string using the JSON-encoded pattern
-    const startIndex = jsonString.indexOf(jsonEncodedValueWithQuotes);
-    if (startIndex === -1) {
+    // Prefer matching the specific key-value pair to avoid matching earlier duplicates
+    const pathParts = (textValue.path || '').split('.');
+    // Resolve the closest property name (skip array index segments like "[0]")
+    let propName = 'content';
+    for (let i = pathParts.length - 1; i >= 0; i--) {
+      const seg = pathParts[i];
+      if (seg && !/^\[\d+\]$/.test(seg)) { propName = seg; break; }
+    }
+
+    // Helper to find nth occurrence
+    const findNth = (haystack, needle, n, fromIndex = 0) => {
+      let idx = fromIndex;
+      for (let i = 0; i < n; i++) {
+        idx = haystack.indexOf(needle, idx);
+        if (idx === -1) return -1;
+        if (i < n - 1) idx = idx + needle.length;
+      }
+      return idx;
+    };
+
+    let keyedIndex = -1;
+    if (propName === 'path') {
+      // Target the correct article's path array and the correct element index
+      const artMatch = (textValue.path || '').match(/articles\.\[(\d+)\]/);
+      const elemMatch = (textValue.path || '').match(/\.path\.\[(\d+)\]$/);
+      const articleOrdinal = artMatch ? parseInt(artMatch[1], 10) : 0;
+      const elemOrdinal = elemMatch ? parseInt(elemMatch[1], 10) : 0;
+
+      // Find the Nth occurrence of "path": [ corresponding to the articleOrdinal
+      const pathArrayToken = '"path": [';
+      const arrayStart = findNth(jsonString, pathArrayToken, articleOrdinal + 1, 0);
+      if (arrayStart !== -1) {
+        // Within this array region, find the nth value occurrence
+        const afterArray = jsonString.slice(arrayStart);
+        const localIdx = findNth(afterArray, jsonEncodedValueWithQuotes, elemOrdinal + 1, 0);
+        if (localIdx !== -1) {
+          keyedIndex = arrayStart + localIdx;
+        }
+      }
+    } else {
+      const propPrefix = `"${propName}": `;
+      keyedIndex = jsonString.indexOf(propPrefix + jsonEncodedValueWithQuotes);
+    }
+
+    // Fallback: plain value search if exact key-value not found
+    if (keyedIndex === -1) {
+      keyedIndex = jsonString.indexOf(jsonEncodedValueWithQuotes);
+    }
+    if (keyedIndex === -1) {
       console.log('  ❌ Could not find JSON-encoded value in editor string');
       return highlights;
     }
 
     // Compute base line/column at which the value starts in the editor
-    const valueStartIndex = startIndex + 1; // skip opening quote
+    let valueStartIndex;
+    if (propName === 'path') {
+      // For arrays, the start index is directly at the string's opening quote
+      valueStartIndex = keyedIndex + 1;
+    } else {
+      const propPrefix = `"${propName}": `;
+      valueStartIndex = keyedIndex + (jsonString.startsWith(propPrefix, keyedIndex) ? propPrefix.length + 1 : 1);
+    }
     const beforeValue = jsonString.substring(0, valueStartIndex);
     const lines = beforeValue.split('\n');
     const startLine = lines.length - 1;
@@ -541,10 +597,11 @@ const JSONEditor = ({ jsonData, onChange, pdfText }) => {
         <div className="legend legend-compact">
           {(() => {
             const total = blockStats.found + blockStats.notFound;
-            const pct = total ? Math.round((blockStats.found / total) * 100) : 0;
+            const pct = total ? ((blockStats.found / total) * 100).toFixed(2) : '0.00';
+            const pctNum = parseFloat(pct);
             return (
               <div className="legend-stats">
-                <span className={`pct-badge ${pct === 100 ? 'glow' : ''}`}>{pct}%</span>
+                <span className={`pct-badge ${pctNum === 100 ? 'glow' : ''}`}>{pct}%</span>
                 <span className="legend-item"><span className="legend-box green"></span>{blockStats.found} blocks</span>
                 <span className="legend-item"><span className="legend-box red"></span>{blockStats.notFound} blocks</span>
               </div>

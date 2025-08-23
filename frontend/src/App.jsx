@@ -6,13 +6,15 @@ import './App.css';
 
 function App() {
   const [jsonData, setJsonData] = useState(null);
-  const [pdfFile, setPdfFile] = useState('/DASPA_2025.pdf');
-  const [pageStart, setPageStart] = useState(1);
-  const [pageEnd, setPageEnd] = useState(4);
+  const [pdfFile, setPdfFile] = useState(null);
+  const [pageStart, setPageStart] = useState('');
+  const [pageEnd, setPageEnd] = useState('');
   const [loading, setLoading] = useState(false);
   const [activeButton, setActiveButton] = useState(null);
   const [llm1Done, setLlm1Done] = useState(false);
+  const [splitter1Done, setSplitter1Done] = useState(false);
   const [llm2Done, setLlm2Done] = useState(false);
+  const [llm3Done, setLlm3Done] = useState(false);
 
   // PDF text for keyword matching (extracted from actual PDF)
   const [pdfText, setPdfText] = useState('');
@@ -31,25 +33,38 @@ function App() {
     setActiveButton(endpoint);
     
     try {
-      const payload = {
-        pdf: pdfFile,
-        index_page_start: pageStart,
-        index_page_end: pageEnd
-      };
-      
-      if (includeJsonData && jsonData) {
-        payload.json_data = jsonData;
+      let response;
+      if (endpoint === 'llm-pass-1') {
+        // Use multipart to upload the actual PDF file
+        const form = new FormData();
+        if (!pdfFile) throw new Error('No PDF selected');
+        form.append('pdf', pdfFile);
+        form.append('index_page_start', pageStart);
+        form.append('index_page_end', pageEnd);
+        response = await axios.post(`/api/${endpoint}`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+      } else {
+        // For Splitter and later passes, TOC range is not needed by backend
+        const payload = {};
+        if (includeJsonData && jsonData) payload.json_data = jsonData;
+        response = await axios.post(`/api/${endpoint}`, payload);
       }
-      
-      const response = await axios.post(`/api/${endpoint}`, payload);
       
       if (response.data.status === 'success') {
         setJsonData(response.data.data);
         if (endpoint === 'llm-pass-1') {
           setLlm1Done(true);
+          setSplitter1Done(false);
+          setLlm2Done(false);
+          setLlm3Done(false);
         }
         if (endpoint === 'llm-pass-2') {
           setLlm2Done(true);
+        }
+        if (endpoint === 'splitter-1') {
+          setSplitter1Done(true);
+        }
+        if (endpoint === 'splitter-2') {
+          setLlm3Done(true);
         }
       }
     } catch (error) {
@@ -68,11 +83,12 @@ function App() {
   const handleUploadPdf = (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    setPdfFile(url);
+    setPdfFile(file);
     setJsonData(null);
     setLlm1Done(false);
+    setSplitter1Done(false);
     setLlm2Done(false);
+    setLlm3Done(false);
   };
 
   const handleTocStart = () => {
@@ -89,21 +105,26 @@ function App() {
         <div className="brand">
           <span className="brand-mark">i</span>Split
         </div>
-        <div className="top-actions">
-          <label className="upload-btn">
-            <input type="file" accept="application/pdf" onChange={handleUploadPdf} />
-            Upload PDF
-          </label>
-        </div>
+        <div className="top-actions"></div>
       </header>
 
       <div className="main-content">
         <div className="panel pdf-panel">
-          <PDFViewer 
-            pdfFile={pdfFile} 
-            highlightedText={jsonData}
-            onTextExtracted={handlePdfTextExtracted}
-          />
+          <div className="pdf-controls">
+            <label className="upload-btn">
+              <input type="file" accept="application/pdf" onChange={handleUploadPdf} />
+              Upload PDF
+            </label>
+          </div>
+          {pdfFile ? (
+            <PDFViewer 
+              pdfFile={URL.createObjectURL(pdfFile)} 
+              highlightedText={jsonData}
+              onTextExtracted={handlePdfTextExtracted}
+            />
+          ) : (
+            <div className="pdf-placeholder">Upload a PDF to begin</div>
+          )}
         </div>
         
         <div className="panel json-panel">
@@ -115,7 +136,7 @@ function App() {
                 type="number"
                 min="1"
                 value={pageStart}
-                onChange={(e) => setPageStart(parseInt(e.target.value) || 1)}
+                onChange={(e) => setPageStart(e.target.value)}
                 placeholder="Start"
               />
               <input
@@ -123,14 +144,14 @@ function App() {
                 type="number"
                 min="1"
                 value={pageEnd}
-                onChange={(e) => setPageEnd(parseInt(e.target.value) || 1)}
+                onChange={(e) => setPageEnd(e.target.value)}
                 placeholder="End"
               />
             </div>
             <div className="action-inline">
               <button
                 onClick={() => handleApiCall('llm-pass-1')}
-                disabled={loading || !pageStart || !pageEnd}
+                disabled={loading || !pdfFile || !pageStart || !pageEnd}
                 className={`pill-btn ${activeButton === 'llm-pass-1' ? 'active' : ''} ${(!pageStart || !pageEnd) ? 'danger' : ''}`}
               >
                 {loading && activeButton === 'llm-pass-1' ? 'Processing…' : 'LLM PASS 1'}
@@ -144,17 +165,17 @@ function App() {
               </button>
               <button
                 onClick={() => handleApiCall('llm-pass-2')}
-                disabled={!llm1Done || loading}
+                disabled={!splitter1Done || loading}
                 className={`pill-btn ${activeButton === 'llm-pass-2' ? 'active' : ''}`}
               >
                 {loading && activeButton === 'llm-pass-2' ? 'Processing…' : 'LLM PASS 2'}
               </button>
               <button
-                onClick={() => handleApiCall('splitter-2', true)}
+                onClick={() => handleApiCall('llm-pass-3', true)}
                 disabled={!llm2Done || loading}
-                className={`pill-btn ${activeButton === 'splitter-2' ? 'active' : ''}`}
+                className={`pill-btn ${activeButton === 'llm-pass-3' ? 'active' : ''}`}
               >
-                {loading && activeButton === 'splitter-2' ? 'Processing…' : 'Splitter 2'}
+                {loading && activeButton === 'llm-pass-3' ? 'Processing…' : 'LLM PASS 3'}
               </button>
             </div>
           </div>

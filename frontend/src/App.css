@@ -293,13 +293,15 @@ body {
   padding: 1.5rem;
 }
 
+.pdf-placeholder { padding: 40px; color:#7b8794; text-align:center; }
+
 .pdf-controls {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
-  margin-bottom: 1rem;
-  padding-bottom: 1rem;
+  padding: 1rem;
   border-bottom: 1px solid #e0e0e0;
+  background: rgba(255,255,255,0.8);
 }
 
 .control-button {
