@@ -102,6 +102,19 @@ def splitter_2():
         'message': f'Splitter 2 executed for pages {index_page_start} to {index_page_end}'
     })
 
+@app.route('/api/ask-ai', methods=['POST'])
+def ask_ai():
+    """
+    Dummy Ask-AI endpoint. Accepts { snippet, path } and echoes back.
+    """
+    data = request.json or {}
+    return jsonify({
+        'status': 'queued',
+        'message': 'AI request received',
+        'snippet': data.get('snippet', ''),
+        'path': data.get('path', '')
+    })
+
 @app.route('/api/health', methods=['GET'])
 def health():
     return jsonify({'status': 'healthy'})

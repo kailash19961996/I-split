@@ -14,7 +14,8 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: radial-gradient(1200px 600px at 10% -10%, #ffffff 0%, #f6f8fb 40%, #eef1f5 100%);
+  background: radial-gradient(1200px 600px at 10% -10%, #ffffff 0%, #eef4ff 35%, #e3ecff 100%),
+              linear-gradient(135deg, rgba(74,144,226,0.16), rgba(110,168,255,0.12));
 }
 
 /* Modern Topbar */
@@ -269,6 +270,7 @@ body {
   color: #2c3e50;
   font-weight: 600;
   cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .pill-btn.active {
@@ -279,6 +281,9 @@ body {
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+.pill-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(16,24,40,0.1); }
+.pill-btn:active:not(:disabled) { transform: translateY(0); }
 
 /* PDF Viewer Styles */
 .pdf-viewer-container {
@@ -432,6 +437,47 @@ body {
 }
 
 .legend .stats { color: #2c3e50; font-weight: 600; }
+
+.legend-stats { display:flex; align-items:center; gap: 0.75rem; margin-left: 1rem; }
+.pct-badge {
+  background: #e8f5e9;
+  color: #1b5e20;
+  border: 1px solid #a5d6a7;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 700;
+}
+.pct-badge.glow {
+  box-shadow: 0 0 0 0 rgba(40,167,69,0.6);
+  animation: greenGlow 1.8s ease-out 1;
+}
+@keyframes greenGlow {
+  0% { box-shadow: 0 0 0 0 rgba(40,167,69,0.6); }
+  70% { box-shadow: 0 0 16px 8px rgba(40,167,69,0.0); }
+  100% { box-shadow: 0 0 0 0 rgba(40,167,69,0.0); }
+}
+
+.ask-ai-popover {
+  position: absolute;
+  transform: translate(-50%, -110%);
+  background: #ffffff;
+  border: 1px solid #e6ebf1;
+  border-radius: 8px;
+  padding: 6px;
+  box-shadow: 0 8px 24px rgba(16,24,40,0.12);
+  z-index: 5;
+}
+.ask-ai-popover.below { transform: translate(-50%, 10%); }
+.ask-ai-btn {
+  background: #4a90e2;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.ask-ai-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(74,144,226,0.35); }
 
 /* ACE Editor Custom Highlights */
 .ace-highlight-green {

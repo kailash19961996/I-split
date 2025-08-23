@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
+import { askAIForBlock } from '../utils/askAI';
 import AceEditor from 'react-ace';
 import 'ace-builds/src-noconflict/mode-json';
 import 'ace-builds/src-noconflict/theme-monokai';
@@ -8,6 +9,9 @@ const JSONEditor = ({ jsonData, onChange, pdfText }) => {
   const [editorValue, setEditorValue] = useState('');
   const [highlightedRanges, setHighlightedRanges] = useState([]);
   const [blockStats, setBlockStats] = useState({ found: 0, notFound: 0 });
+  const [redRanges, setRedRanges] = useState([]);
+  const [popover, setPopover] = useState({ visible: false, top: 0, left: 0, snippet: '', path: '', placement: 'above' });
+  const editorRef = useRef(null);
 
   useEffect(() => {
     if (jsonData) {
@@ -343,6 +347,7 @@ const JSONEditor = ({ jsonData, onChange, pdfText }) => {
     
     setHighlightedRanges(allHighlights);
     setBlockStats({ found: blocksFoundTotal, notFound: blocksNotFoundTotal });
+    setRedRanges(allHighlights.filter(h => h.className && h.className.indexOf('red') !== -1));
     console.log(`✅ Applied ${allHighlights.length} highlights to editor`);
     console.log('🎨 === END WORD-BY-WORD HIGHLIGHTING PROCESS ===\n');
   };
@@ -489,26 +494,55 @@ const JSONEditor = ({ jsonData, onChange, pdfText }) => {
     console.log('⚡ === END EDITOR CHANGE ===\n');
   };
 
+  const handleEditorLoad = (editor) => {
+    editorRef.current = editor;
+  };
+
+  const handleCursorChange = () => {
+    if (!editorRef.current) return;
+    const pos = editorRef.current.getCursorPosition();
+    const row = pos.row;
+    const col = pos.column;
+    const match = redRanges.find(r => row === r.startRow && col >= r.startCol && col <= r.endCol);
+    if (match) {
+      const screen = editorRef.current.renderer.textToScreenCoordinates(row, Math.min(col, match.endCol));
+      const containerRect = editorRef.current.container.getBoundingClientRect();
+      const top = screen.pageY - containerRect.top - 8;
+      const left = screen.pageX - containerRect.left + 8;
+      const placement = (screen.pageY - containerRect.top < 40) ? 'below' : 'above';
+      // Extract snippet around cursor from editorValue
+      const snippet = editorRef.current.session.getLine(row).slice(match.startCol, match.endCol);
+      setPopover({ visible: true, top, left, snippet, path: '', placement });
+    } else {
+      if (popover.visible) setPopover(prev => ({ ...prev, visible: false }));
+    }
+  };
+
+  const handleAskAI = async () => {
+    if (!popover.snippet) return;
+    try {
+      await askAIForBlock({ snippet: popover.snippet, path: popover.path });
+    } catch (e) {
+      // no-op for now
+    }
+  };
+
   return (
     <div className="json-editor-container">
       <div className="editor-header">
         <h3>JSON Editor</h3>
-        <div className="legend">
-          <span className="legend-item">
-            <span className="legend-box green"></span>
-            Matched in PDF
-          </span>
-          <span className="legend-item">
-            <span className="legend-box red"></span>
-            Not found in PDF
-          </span>
-          <span className="legend-item stats">
-            {(() => {
-              const total = blockStats.found + blockStats.notFound;
-              const pct = total ? Math.round((blockStats.found / total) * 100) : 0;
-              return `Blocks: ${blockStats.found} found / ${blockStats.notFound} not • ${pct}%`;
-            })()}
-          </span>
+        <div className="legend legend-compact">
+          {(() => {
+            const total = blockStats.found + blockStats.notFound;
+            const pct = total ? Math.round((blockStats.found / total) * 100) : 0;
+            return (
+              <div className="legend-stats">
+                <span className={`pct-badge ${pct === 100 ? 'glow' : ''}`}>{pct}%</span>
+                <span className="legend-item"><span className="legend-box green"></span>{blockStats.found} blocks</span>
+                <span className="legend-item"><span className="legend-box red"></span>{blockStats.notFound} blocks</span>
+              </div>
+            );
+          })()}
         </div>
       </div>
       
@@ -517,6 +551,8 @@ const JSONEditor = ({ jsonData, onChange, pdfText }) => {
         theme="monokai"
         value={editorValue}
         onChange={handleChange}
+        onLoad={handleEditorLoad}
+        onCursorChange={handleCursorChange}
         name="json-editor"
         editorProps={{ $blockScrolling: true }}
         setOptions={{
@@ -536,6 +572,11 @@ const JSONEditor = ({ jsonData, onChange, pdfText }) => {
         }}
         markers={highlightedRanges}
       />
+      {popover.visible && (
+        <div className={`ask-ai-popover ${popover.placement === 'below' ? 'below' : ''}`} style={{ top: popover.top, left: popover.left }}>
+          <button className="ask-ai-btn" onClick={handleAskAI}>Ask AI</button>
+        </div>
+      )}
     </div>
   );
   };
