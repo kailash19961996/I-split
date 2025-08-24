@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { askAIForBlock } from '../utils/askAI';
 import AceEditor from 'react-ace';
 import 'ace-builds/src-noconflict/mode-json';
@@ -14,19 +14,39 @@ const JSONEditor = ({ jsonData, onChange, pdfText }) => {
   const [currentSnippet, setCurrentSnippet] = useState('');
   const editorRef = useRef(null);
   const containerRef = useRef(null);
+  const highlightTimerRef = useRef(null);
+
+  // Performance safety limits
+  const MAX_JSON_STRING_LENGTH_FOR_HIGHLIGHT = 400000; // ~400 KB
+  const MAX_CONTENT_VALUES_FOR_HIGHLIGHT = 5000; // limit items to process
+  const MAX_MARKERS = 5000; // cap markers for Ace performance
+
+  // Pre-normalize PDF text once to avoid repeated heavy work
+  const normalizedPdf = useMemo(() => {
+    if (!pdfText) return '';
+    return normalizeText(pdfText);
+  }, [pdfText]);
 
   useEffect(() => {
     if (jsonData) {
-      // Custom JSON stringifier to preserve key order
       const formattedJson = JSON.stringify(jsonData, null, 2);
       setEditorValue(formattedJson);
-      
-      // Perform keyword matching and highlighting
-      if (pdfText) {
-        highlightMatches(formattedJson, pdfText);
+
+      // Guard: skip heavy highlighting for very large payloads
+      if (!pdfText || formattedJson.length > MAX_JSON_STRING_LENGTH_FOR_HIGHLIGHT) {
+        setHighlightedRanges([]);
+        setBlockStats({ found: 0, notFound: 0 });
+        setRedRanges([]);
+        return;
       }
+
+      // Debounce initial highlight slightly to let UI render
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+      highlightTimerRef.current = setTimeout(() => {
+        highlightMatches(formattedJson, pdfText, normalizedPdf);
+      }, 100);
     }
-  }, [jsonData, pdfText]);
+  }, [jsonData, pdfText, normalizedPdf]);
 
   /**
    * Heavy normalisation.
@@ -145,38 +165,30 @@ const JSONEditor = ({ jsonData, onChange, pdfText }) => {
    * Enhanced text normalization for consistent comparison
    * Converts both JSON and PDF text to the same format
    */
-  const normalizeText = (text) => {
+  function normalizeText(text) {
     if (!text) return '';
-    
     return text
       .toLowerCase()
-      // Convert all types of quotes to standard quotes
       .replace(/[""«»]/g, '"')
       .replace(/[''‛`´]/g, "'")
-      // Convert all types of dashes to standard dash
       .replace(/[–—‐‒]/g, '-')
-      // Handle JSON escape sequences - convert \n and \n\n to spaces
       .replace(/\\n\\n/g, ' ')
       .replace(/\\n/g, ' ')
-      // Handle actual newlines and paragraphs - convert to spaces
-      .replace(/\n\n+/g, ' ')  // Multiple newlines (paragraphs) -> single space
-      .replace(/\n/g, ' ')     // Single newlines -> single space
-      // Remove remaining backslashes (except for valid escape sequences)
+      .replace(/\n\n+/g, ' ')
+      .replace(/\n/g, ' ')
       .replace(/\\(?![nrt\\"])/g, '')
-      // Keep only alphanumeric, quotes, dashes, and spaces
       .replace(/[^a-z0-9"'\-\s]/g, ' ')
-      // Collapse multiple spaces to single space
       .replace(/\s+/g, ' ')
       .trim();
-  };
+  }
 
   /**
    * Checks if a phrase exists in the PDF (after normalization).
    * Treats the PDF as one long line; handles newlines/escapes consistently.
    */
-  const phraseMatches = (phrase, pdfContent) => {
+  const phraseMatches = (phrase, pdfContent, preNormalizedPdf) => {
     if (!phrase || !pdfContent) return false;
-    const cleanPdf = normalizeText(pdfContent);
+    const cleanPdf = preNormalizedPdf ?? normalizeText(pdfContent);
     const cleanPhrase = normalizeText(phrase);
     if (!cleanPhrase) return false;
     return cleanPdf.includes(cleanPhrase);
@@ -268,7 +280,7 @@ const JSONEditor = ({ jsonData, onChange, pdfText }) => {
    * Word-by-word highlighting function that processes content precisely
    * Green = Found in PDF, Red = Not found in PDF
    */
-  const highlightMatches = (jsonString, pdfContent) => {
+  const highlightMatches = (jsonString, pdfContent, preNormalizedPdf) => {
     console.log('\n🎨 === STARTING WORD-BY-WORD HIGHLIGHTING PROCESS ===');
     console.log(`JSON string length: ${jsonString.length}`);
     console.log(`PDF content available: ${!!pdfContent}`);
@@ -328,15 +340,18 @@ const JSONEditor = ({ jsonData, onChange, pdfText }) => {
       return;
     }
 
+    // Guard: limit how many content values we process for performance
+    const limitedContentValues = contentValues.slice(0, MAX_CONTENT_VALUES_FOR_HIGHLIGHT);
+
     // Process each content value with word-by-word highlighting
     const allHighlights = [];
     let blocksFoundTotal = 0;
     let blocksNotFoundTotal = 0;
     
-    contentValues.forEach((textValue, index) => {
+    limitedContentValues.forEach((textValue, index) => {
       console.log(`\n🎯 Processing content value ${index + 1}: "${textValue.value.substring(0, 50)}${textValue.value.length > 50 ? '...' : ''}" at path: ${textValue.path}`);
       
-      const result = highlightContentWordByWord(textValue, jsonString, pdfContent);
+      const result = highlightContentWordByWord(textValue, jsonString, pdfContent, preNormalizedPdf);
       allHighlights.push(...result.highlights);
       blocksFoundTotal += result.blocksFound;
       blocksNotFoundTotal += result.blocksNotFound;
@@ -350,17 +365,19 @@ const JSONEditor = ({ jsonData, onChange, pdfText }) => {
       console.log(`  ${i + 1}. Line ${highlight.startRow + 1}, cols ${highlight.startCol}-${highlight.endCol}: ${color}`);
     });
     
-    setHighlightedRanges(allHighlights);
+    // Cap markers to avoid overwhelming Ace editor
+    const cappedHighlights = allHighlights.length > MAX_MARKERS ? allHighlights.slice(0, MAX_MARKERS) : allHighlights;
+    setHighlightedRanges(cappedHighlights);
     setBlockStats({ found: blocksFoundTotal, notFound: blocksNotFoundTotal });
-    setRedRanges(allHighlights.filter(h => h.className && h.className.indexOf('red') !== -1));
-    console.log(`✅ Applied ${allHighlights.length} highlights to editor`);
+    setRedRanges(cappedHighlights.filter(h => h.className && h.className.indexOf('red') !== -1));
+    console.log(`✅ Applied ${cappedHighlights.length} highlights to editor`);
     console.log('🎨 === END WORD-BY-WORD HIGHLIGHTING PROCESS ===\n');
   };
 
   /**
    * Word-by-word highlighting for precise content validation
    */
-  const highlightContentWordByWord = (textValue, jsonString, pdfContent) => {
+  const highlightContentWordByWord = (textValue, jsonString, pdfContent, preNormalizedPdf) => {
     const highlights = [];
     let blocksFound = 0;
     let blocksNotFound = 0;
@@ -470,7 +487,7 @@ const JSONEditor = ({ jsonData, onChange, pdfText }) => {
         const blockPhrase = blockWords.join(' ');
 
         // Determine match at block level
-        const blockMatches = phraseMatches(blockPhrase, pdfContent);
+        const blockMatches = phraseMatches(blockPhrase, pdfContent, preNormalizedPdf);
         if (blockMatches) blocksFound++; else blocksNotFound++;
 
         // Emit per-word highlights using the block color
@@ -531,18 +548,24 @@ const JSONEditor = ({ jsonData, onChange, pdfText }) => {
       onChange(parsedJson);
       
       // Re-highlight on change immediately
-      if (pdfText) {
+      if (pdfText && newValue.length <= MAX_JSON_STRING_LENGTH_FOR_HIGHLIGHT) {
         console.log('🔄 Re-highlighting due to valid JSON change');
-        highlightMatches(newValue, pdfText);
+        if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+        highlightTimerRef.current = setTimeout(() => {
+          highlightMatches(newValue, pdfText, normalizedPdf);
+        }, 120);
       } else {
         console.log('❌ No PDF text available for highlighting');
       }
     } catch (error) {
       console.log('⚠️ Invalid JSON - highlighting anyway');
       // Invalid JSON, still highlight what we can
-      if (pdfText) {
+      if (pdfText && newValue.length <= MAX_JSON_STRING_LENGTH_FOR_HIGHLIGHT) {
         console.log('🔄 Re-highlighting despite invalid JSON');
-        highlightMatches(newValue, pdfText);
+        if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+        highlightTimerRef.current = setTimeout(() => {
+          highlightMatches(newValue, pdfText, normalizedPdf);
+        }, 120);
       } else {
         console.log('❌ No PDF text available for highlighting');
       }
